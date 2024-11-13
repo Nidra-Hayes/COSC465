@@ -286,4 +286,59 @@ int main() {
     cin >> password;
 
     if (choice == 1) {
-        auth.registerUser(username
+       // Register user, and automatically log them in if registration is successful
+        auth.registerUser(username, password);
+    } else if (choice == 2) {
+        // Attempt login
+        if (!auth.loginUser(username, password)) {
+            return 0; // Exit if login fails
+        }
+    } else {
+        cout << "Invalid choice.\n";
+        return 0; // Exit if invalid choice
+    }
+
+    // Get the user object
+    User* currentUser = auth.getUser(username);
+    if (currentUser) {
+        cout << "Welcome, " << username << "!\n";
+
+        while (true) {
+            cout << "\nTask Management Menu\n";
+            cout << "1. Add Task\n";
+            cout << "2. Display All Tasks\n";
+            cout << "6. Exit\n";
+            cout << "Choose an option: ";
+            cin >> choice;
+
+            switch (choice) {
+                case 1: {
+                    string title, description, priority, dueDate;
+                    cout << "Enter task title: ";
+                    cin.ignore();
+                    getline(cin, title);
+                    cout << "Enter task description: ";
+                    getline(cin, description);
+                    cout << "Enter task priority (Low, Medium, High): ";
+                    cin >> priority;
+                    cout << "Enter task due date (YYYY-MM-DD): ";
+                    cin >> dueDate;
+                    Task newTask(title, description, priority, dueDate);
+                    currentUser->addTask(conn, newTask);
+                    break;
+                }
+                case 2:
+                    currentUser->displayTasks(conn);
+                    break;
+                case 6:
+                    cout << "Exiting program...\n";
+                    mysql_close(conn);
+                    return 0;
+                default:
+                    cout << "Invalid choice. Please try again.\n";
+            }
+        }
+    }
+
+    return 0;
+}
