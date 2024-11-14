@@ -7,6 +7,7 @@
 
 using namespace std;
 
+//Task Class used by the TaskManager class to create a Task.
 class Task {
 private:
     string title;
@@ -14,7 +15,7 @@ private:
     string priority;  // Low, Medium, High
     string dueDate;   // Represent date as "YYYY-MM-DD"
     bool completed;   // Indicates whether the task is completed or not
-
+//Constructor initializes the object for the Task Class
 public:
     Task(string title, string description, string priority, string dueDate)
         : title(title), description(description), priority(priority), dueDate(dueDate), completed(false) {}
@@ -42,10 +43,12 @@ public:
     }
 };
 
+//Task Manager Class
 class TaskManager {
 private:
-    vector<Task> tasks;
+    vector<Task> tasks; //A vector that stores Task objects
 
+//Allows the user to create a new task
 public:
     void createTask() {
         string title, description, priority, dueDate;
@@ -80,7 +83,7 @@ public:
         cout << "Task not found.\n";
     }
 
-    void editTask() {
+    void editTask() { //Allows the user to edit an existing task
         string title;
         cout << "Enter the title of the task to edit: ";
         cin.ignore();
@@ -173,10 +176,11 @@ public:
 
 class Authentication {
 private:
-    vector<User> users;
-    string filename;
+    vector<User> users; // A vector to store registered users
+    string filename; // The filename to store and load user data
 
     void loadUsers() {
+        // Loads user data from a file into the 'users' vector
         ifstream file(filename);
         if (!file) {
             cerr << "Error opening file for loading users.\n";
@@ -190,13 +194,13 @@ private:
                 continue;  // Skip malformed lines
             }
 
-            string username = line.substr(0, pos);
-            string password = line.substr(pos + 1);
-            users.push_back(User(username, password));
+            string username = line.substr(0, pos); // Extract username
+            string password = line.substr(pos + 1); // Extract password
+            users.push_back(User(username, password)); // Add user to the vector
         }
-        file.close();
+        file.close(); // Close the file after reading
     }
-
+     // Saves user data from the 'users' vector to the file
     void saveUsers() {
         ofstream file(filename, ios::trunc);
         if (!file) {
@@ -205,25 +209,28 @@ private:
         }
 
         for (const User& user : users) {
-            file << user.getUsername() << "," << user.getPassword() << endl;
+            file << user.getUsername() << "," << user.getPassword() << endl; // Write each user to the file
         }
         file.close();
     }
 
 public:
     Authentication(string filename) : filename(filename) {
-        loadUsers();
+        loadUsers(); // Load users from the file when the Authentication object is created
     }
 
     bool isValidUsername(const string& username) {
+         // Checks if the username is non-empty and contains only alphanumeric characters
         return !username.empty() && regex_match(username, regex("^[a-zA-Z0-9]+$"));
     }
 
     bool isValidPassword(const string& password) {
+        // Checks if the password is at least 8 characters long and contains a number and a special character
         return password.length() >= 8 && regex_search(password, regex("[0-9]")) && regex_search(password, regex("[!@#$%^&*]"));
     }
 
     void registerUser(string& username, string& password) {
+        // Prompts the user for a valid username and password, and registers the user if valid
         while (!isValidUsername(username)) {
             cout << "Error: Invalid username. Only alphanumeric characters are allowed, and it cannot be empty.\n";
             cout << "Please enter a valid username: ";
@@ -245,28 +252,30 @@ public:
             cout << "Please enter a valid password: ";
             cin >> password;
         }
-
+        // If username and password are valid, register the user and save the data to the file
         users.push_back(User(username, password));
-        saveUsers();
+        saveUsers(); // Save the updated user data to the file
         cout << "Registration successful.\n";
     }
 
+    // Checks if the username and password match any existing user for login
     bool loginUser(string username, string password) {
         for (User& user : users) {
             if (user.getUsername() == username && user.getPassword() == password) {
-                return true;
+                return true; //Log in successful
             }
         }
-        return false;
+        return false; //Log in failed
     }
 
-    User* getUserByUsername(string username) {
+    User* getUserByUsername(string username) { //User* points to the user object
+        // Retrieves the User object by username (if it exists)
         for (User& user : users) {
             if (user.getUsername() == username) {
-                return &user;
+                return &user; // Return the User object
             }
         }
-        return nullptr;
+        return nullptr; // Return nullptr if user not found
     }
 };
 
