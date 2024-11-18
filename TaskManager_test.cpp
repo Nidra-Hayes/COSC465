@@ -59,8 +59,10 @@ public:
         getline(cin, description);
         cout << "Enter task priority (Low, Medium, High): ";
         cin >> priority;
-        cout << "Enter task due date (YYYY-MM-DD): ";
-        cin >> dueDate;
+        cout << "Enter task due date (YYYY-MM-DD HH:MM AM/PM): ";
+        cin.ignore(); //Clear input again for the time
+        getline(cin, dueDate);
+        //cin >> dueDate;
 
         Task newTask(title, description, priority, dueDate);
         tasks.push_back(newTask);
@@ -98,7 +100,7 @@ public:
                 getline(cin, newDescription);
                 cout << "Enter new priority (Low, Medium, High) (leave empty to keep current): ";
                 getline(cin, newPriority);
-                cout << "Enter new due date (YYYY-MM-DD) (leave empty to keep current): ";
+                cout << "Enter new due date (YYYY-MM-DD HH:MM AM/PM) (leave empty to keep current): ";
                 getline(cin, newDueDate);
 
                 if (!newTitle.empty()) task.setTitle(newTitle);
