@@ -4,8 +4,30 @@
 #include <algorithm>
 #include <ctime>
 #include <sstream>
+#include <iomanip>  // For formatting dates
 
 using namespace std;
+
+// Helper function to convert a date-time string (YYYY-MM-DD HH:MM AM/PM) to a tm struct
+tm stringToTime(const string& dateStr) {
+    tm timeStruct = {};
+    stringstream ss(dateStr);
+    ss >> get_time(&timeStruct, "%Y-%m-%d %I:%M %p");  // Read the full date-time including AM/PM
+    return timeStruct;
+}
+
+// Helper function to get the current date-time as a string in YYYY-MM-DD HH:MM AM/PM format
+string getCurrentDateTime() {
+    time_t t = time(0);
+    struct tm* now = localtime(&t);
+    stringstream ss;
+    ss << (1900 + now->tm_year) << "-" << setw(2) << setfill('0') << (1 + now->tm_mon) << "-" 
+       << setw(2) << setfill('0') << now->tm_mday << " "
+       << setw(2) << setfill('0') << (now->tm_hour % 12 == 0 ? 12 : now->tm_hour % 12) << ":" 
+       << setw(2) << setfill('0') << now->tm_min << " " 
+       << (now->tm_hour >= 12 ? "PM" : "AM");
+    return ss.str();
+}
 
 //Task Class used by the TaskManager class to create a Task.
 class Task {
@@ -39,6 +61,31 @@ public:
         cout << "Priority: " << priority << endl;
         cout << "Due Date: " << dueDate << endl;
         cout << (completed ? "Status: Completed" : "Status: Pending") << endl;
+        cout << "-------------------------------\n";
+    }
+};
+
+// Notification Class to alert the user of overdue or upcoming tasks
+class Notification {
+public:
+    static void displayTaskAlerts(const vector<Task>& tasks) {
+        string currentDateTime = getCurrentDateTime();
+        cout << "Task Notifications:\n";
+        for (const Task& task : tasks) {
+            string taskDueDate = task.getDueDate();
+            if (task.isCompleted()) continue;
+
+            tm taskTime = stringToTime(taskDueDate);
+            tm currentTime = stringToTime(currentDateTime);
+
+            // Check if the task is overdue or due soon
+            if (difftime(mktime(&currentTime), mktime(&taskTime)) > 0) {
+                cout << "ALERT! Task \"" << task.getTitle() << "\" is overdue! Due at: " << taskDueDate << "\n";
+            } else if (difftime(mktime(&taskTime), mktime(&currentTime)) < 86400) {
+                // If the task is due within 24 hours
+                cout << "ALERT! Task \"" << task.getTitle() << "\" is due soon! Due at: " << taskDueDate << "\n";
+            }
+        }
         cout << "-------------------------------\n";
     }
 };
