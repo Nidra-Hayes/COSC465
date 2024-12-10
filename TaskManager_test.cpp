@@ -4,32 +4,43 @@
 #include <algorithm>
 #include <ctime>
 #include <sstream>
-#include <iomanip>  // For formatting dates
+#include <fstream>
+#include <regex>
+#include <limits>
+#include <iomanip>
+#include <chrono>
+#include <stdexcept>
 
 using namespace std;
 
-// Helper function to convert a date-time string (YYYY-MM-DD HH:MM AM/PM) to a tm struct
-tm stringToTime(const string& dateStr) {
-    tm timeStruct = {};
-    stringstream ss(dateStr);
-    ss >> get_time(&timeStruct, "%Y-%m-%d %I:%M %p");  // Read the full date-time including AM/PM
-    return timeStruct;
+std::string getCurrentDateTime() {
+    // Get current time
+    std::time_t now = std::time(nullptr);
+    std::tm currentTime = *std::localtime(&now);
+
+    // Buffer to hold the formatted string
+    char buf[64];
+    
+    // Format: "YYYY-MM-DD hh:mm AM/PM"
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %I:%M %p", &currentTime);
+
+    return std::string(buf);
 }
 
-// Helper function to get the current date-time as a string in YYYY-MM-DD HH:MM AM/PM format
-string getCurrentDateTime() {
-    time_t t = time(0);
-    struct tm* now = localtime(&t);
-    stringstream ss;
-    ss << (1900 + now->tm_year) << "-" << setw(2) << setfill('0') << (1 + now->tm_mon) << "-" 
-       << setw(2) << setfill('0') << now->tm_mday << " "
-       << setw(2) << setfill('0') << (now->tm_hour % 12 == 0 ? 12 : now->tm_hour % 12) << ":" 
-       << setw(2) << setfill('0') << now->tm_min << " " 
-       << (now->tm_hour >= 12 ? "PM" : "AM");
-    return ss.str();
+
+
+std::tm stringToTime(const std::string& dateTime) {
+    std::tm tm = {};
+    std::istringstream ss(dateTime);
+    ss >> std::get_time(&tm, "%Y-%m-%d %I:%M %p");
+    if (ss.fail()) {
+        throw std::invalid_argument("Failed to parse the date-time string.");
+    }
+    return tm;
 }
 
-//Task Class used by the TaskManager class to create a Task.
+
+// Task Class
 class Task {
 private:
     string title;
@@ -37,7 +48,7 @@ private:
     string priority;  // Low, Medium, High
     string dueDate;   // Represent date as "YYYY-MM-DD"
     bool completed;   // Indicates whether the task is completed or not
-//Constructor initializes the object for the Task Class
+
 public:
     Task(string title, string description, string priority, string dueDate)
         : title(title), description(description), priority(priority), dueDate(dueDate), completed(false) {}
@@ -65,57 +76,23 @@ public:
     }
 };
 
-// Notification Class to alert the user of overdue or upcoming tasks
-class Notification {
-public:
-    static void displayTaskAlerts(const vector<Task>& tasks) {
-        string currentDateTime = getCurrentDateTime();
-        cout << "Task Notifications:\n";
-        for (const Task& task : tasks) {
-            string taskDueDate = task.getDueDate();
-            if (task.isCompleted()) continue;
-
-            tm taskTime = stringToTime(taskDueDate);
-            tm currentTime = stringToTime(currentDateTime);
-
-            // Check if the task is overdue or due soon
-            if (difftime(mktime(&currentTime), mktime(&taskTime)) > 0) {
-                cout << "ALERT! Task \"" << task.getTitle() << "\" is overdue! Due at: " << taskDueDate << "\n";
-            } else if (difftime(mktime(&taskTime), mktime(&currentTime)) < 86400) {
-                // If the task is due within 24 hours
-                cout << "ALERT! Task \"" << task.getTitle() << "\" is due soon! Due at: " << taskDueDate << "\n";
-            }
-        }
-        cout << "-------------------------------\n";
-    }
-};
-
-//Task Manager Class
 class TaskManager {
 private:
-    vector<Task> tasks; //A vector that stores Task objects
+    vector<Task> tasks; // A vector that stores Task objects
 
-//Allows the user to create a new task
 public:
-    void createTask() {
-        string title, description, priority, dueDate;
-        cout << "Enter task title: ";
-        cin.ignore();  // Clear the input buffer
-        getline(cin, title);
-        cout << "Enter task description: ";
-        getline(cin, description);
-        cout << "Enter task priority (Low, Medium, High): ";
-        cin >> priority;
-        cout << "Enter task due date (YYYY-MM-DD HH:MM AM/PM): ";
-        cin.ignore(); //Clear input again for the time
-        getline(cin, dueDate);
-        //cin >> dueDate;
-
-        Task newTask(title, description, priority, dueDate);
-        tasks.push_back(newTask);
-        cout << "Task created successfully.\n";
+    // Allows the user to create a new task
+    void createTask(const Task& task) {
+        tasks.push_back(task);
+        //cout << "Task created successfully.\n";
     }
 
+    // Public method to access the tasks vector
+    vector<Task>& getTasks() {
+        return tasks;  // Return a reference to the tasks vector
+    }
+
+    // Mark a task as complete
     void markTaskComplete() {
         string title;
         cout << "Enter the title of the task to mark as complete: ";
@@ -131,8 +108,10 @@ public:
         }
         cout << "Task not found.\n";
     }
+     
 
-    void editTask() { //Allows the user to edit an existing task
+    // Edit an existing task
+    void editTask() {
         string title;
         cout << "Enter the title of the task to edit: ";
         cin.ignore();
@@ -162,6 +141,7 @@ public:
         cout << "Task not found.\n";
     }
 
+    // Delete a task
     void deleteTask() {
         string title;
         cout << "Enter the title of the task to delete: ";
@@ -180,6 +160,7 @@ public:
         }
     }
 
+    // Display all tasks
     void displayTasks() {
         if (tasks.empty()) {
             cout << "No tasks available.\n";
@@ -190,6 +171,7 @@ public:
         }
     }
 
+    // Display the task management menu
     void displayMenu() {
         cout << "\nTask Management Menu\n";
         cout << "1. Add Task\n";
@@ -200,36 +182,101 @@ public:
         cout << "6. Exit\n";
     }
 };
+ 
 
+// User Class
 class User {
 private:
     string username;
     string password;
-    TaskManager taskManager;  // Each user has their own task manager
+    TaskManager taskManager; // User-specific TaskManager
 
 public:
     User(string username, string password) : username(username), password(password) {}
 
-    string getUsername() const {
-        return username;
+    string getUsername() const { return username; }
+    string getPassword() const { return password; }
+
+    TaskManager& getTaskManager() { return taskManager; }
+
+    void loadTasksFromFile(const string& filename) {
+        // Load tasks from file into TaskManager's task list
+        ifstream file(filename);
+        if (!file) {
+            cerr << "Error opening task file for loading tasks.\n";
+            return;
+        }
+
+        string line;
+        while (getline(file, line)) {
+
+   stringstream ss(line);
+            string title, description, priority, dueDate;
+            getline(ss, title, ',');
+            getline(ss, description, ',');
+            getline(ss, priority, ',');
+            getline(ss, dueDate, ',');
+
+            // Create a new task and add it to the task manager
+            Task task(title, description, priority, dueDate);
+            taskManager.createTask(task); // Using createTask with the new task
+        }
+        file.close();
     }
 
-    string getPassword() const {
-        return password;
-    }
+    void saveTasksToFile(const string& filename) {
+        ofstream file(filename, ios::trunc);
+        if (!file) {
+            cerr << "Error opening task file for saving tasks.\n";
+            return;
+        }
 
-    TaskManager& getTaskManager() {
-        return taskManager;
+        for (const Task& task : taskManager.getTasks()) {
+            file << task.getTitle() << "," << task.getDescription() << ","
+                 << task.getPriority() << "," << task.getDueDate() << endl;
+        }
+        file.close();
     }
 };
 
+
+
+class Notification {
+public:
+    static void displayTaskAlerts(const std::vector<Task>& tasks) {
+        std::string currentDateTime = getCurrentDateTime();
+        std::cout << "Task Notifications:\n";
+        
+        for (const Task& task : tasks) {
+            std::string taskDueDate = task.getDueDate();
+            if (task.isCompleted()) continue;
+
+            try {
+                std::tm taskTime = stringToTime(taskDueDate);
+                std::tm currentTime = stringToTime(currentDateTime);
+
+                if (difftime(mktime(&currentTime), mktime(&taskTime)) > 0) {
+                    std::cout << "ALERT! Task \"" << task.getTitle() << "\" is overdue! Due at: " << taskDueDate << "\n";
+                } else if (difftime(mktime(&taskTime), mktime(&currentTime)) < 86400) {
+                    std::cout << "ALERT! Task \"" << task.getTitle() << "\" is due soon! Due at: " << taskDueDate << "\n";
+                }
+            } catch (const std::invalid_argument& e) {
+                std::cout << "Invalid date format for task \"" << task.getTitle() << "\". Skipping alert.\n";
+            }
+        }
+        
+        std::cout << "-------------------------------\n";
+    }
+};
+
+
+// Authentication Class
 class Authentication {
 private:
-    vector<User> users; // A vector to store registered users
-    string filename; // The filename to store and load user data
+    vector<User> users;
+    string filename;
 
     void loadUsers() {
-        // Loads user data from a file into the 'users' vector
         ifstream file(filename);
         if (!file) {
             cerr << "Error opening file for loading users.\n";
@@ -239,116 +286,109 @@ private:
         string line;
         while (getline(file, line)) {
             size_t pos = line.find(',');
-            if (pos == string::npos) {
-                continue;  // Skip malformed lines
-            }
+            if (pos == string::npos) continue;
 
-            string username = line.substr(0, pos); // Extract username
-            string password = line.substr(pos + 1); // Extract password
-            users.push_back(User(username, password)); // Add user to the vector
+            string username = line.substr(0, pos);
+            string password = line.substr(pos + 1);
+            users.push_back(User(username, password));
         }
-        file.close(); // Close the file after reading
+        file.close();
     }
-     // Saves user data from the 'users' vector to the file
+
     void saveUsers() {
         ofstream file(filename, ios::trunc);
         if (!file) {
-            cerr << "Error opening file for saving users.\n";
-            return;
+       return;
         }
 
         for (const User& user : users) {
-            file << user.getUsername() << "," << user.getPassword() << endl; // Write each user to the file
+            file << user.getUsername() << "," << user.getPassword() << endl;
         }
         file.close();
     }
 
 public:
     Authentication(string filename) : filename(filename) {
-        loadUsers(); // Load users from the file when the Authentication object is created
+        loadUsers();
     }
 
     bool isValidUsername(const string& username) {
-         // Checks if the username is non-empty and contains only alphanumeric characters
         return !username.empty() && regex_match(username, regex("^[a-zA-Z0-9]+$"));
     }
 
     bool isValidPassword(const string& password) {
-        // Checks if the password is at least 8 characters long and contains a number and a special character
         return password.length() >= 8 && regex_search(password, regex("[0-9]")) && regex_search(password, regex("[!@#$%^&*]"));
     }
 
-    void registerUser(string& username, string& password) {
-        // Prompts the user for a valid username and password, and registers the user if valid
-        while (!isValidUsername(username)) {
-            cout << "Error: Invalid username. Only alphanumeric characters are allowed, and it cannot be empty.\n";
-            cout << "Please enter a valid username: ";
-            cin >> username;
+    bool loginUser(const string& username, const string& password) {
+    for (User& user : users) {
+        if (user.getUsername() == username && user.getPassword() == password) {
+            // Display task alerts when the user logs in
+            Notification::displayTaskAlerts(user.getTaskManager().getTasks());
+            return true;
         }
-
-        // Check if username already exists
-        for (const User& user : users) {
-            if (user.getUsername() == username) {
-                cout << "Error: Username already taken.\n";
-                cout << "Please enter a different username: ";
-                cin >> username;
-                break;
+    }
+    cout << "Invalid username or password.\n";
+    return false;
+}
+    void registerUser(const string& username, const string& password) {
+        if (isValidUsername(username) && isValidPassword(password)) {
+            for (const User& user : users) {
+                if (user.getUsername() == username) {
+                    cout << "Username already taken. Try another one.\n";
+                    return;
+                }
             }
+            users.push_back(User(username, password));
+            saveUsers();
+            cout << "User registered successfully.\n";
+        } else {
+            cout << "Invalid username or password format.\n";
         }
-
-        while (!isValidPassword(password)) {
-            cout << "Error: Invalid password. It must be at least 8 characters long, and contain at least one number and one special character.\n";
-            cout << "Please enter a valid password: ";
-            cin >> password;
-        }
-        // If username and password are valid, register the user and save the data to the file
-        users.push_back(User(username, password));
-        saveUsers(); // Save the updated user data to the file
-        cout << "Registration successful.\n";
     }
 
-    // Checks if the username and password match any existing user for login
-    bool loginUser(string username, string password) {
-        for (User& user : users) {
-            if (user.getUsername() == username && user.getPassword() == password) {
-                return true; //Log in successful
-            }
-        }
-        return false; //Log in failed
-    }
-
-    User* getUserByUsername(string username) { //User* points to the user object
-        // Retrieves the User object by username (if it exists)
+    User* getUser(const string& username) {
         for (User& user : users) {
             if (user.getUsername() == username) {
-                return &user; // Return the User object
+                return &user;
             }
-        }
-        return nullptr; // Return nullptr if user not found
-    }
-};
+        } 
+        return nullptr; 
+}
+ };
+
+
+
+
+
 
 int main() {
     Authentication auth("users.txt");
-    User* currentUser = nullptr;
-
-    int choice;
     string username, password;
-    
-    cout << "1. Register\n2. Login\nChoice: ";
+    int choice;
+
+    // Welcome message and main menu for login/register
+    cout << "Welcome to Task Manager\n";
+    cout << "1. Register\n2. Login\nChoose an option: ";
     cin >> choice;
 
+    // Input username and password
     cout << "Username: ";
     cin >> username;
     cout << "Password: ";
     cin >> password;
 
+    // Handle registration or login
     if (choice == 1) {
-       // Register user, and automatically log them in if registration is successful
+        // Register user, and automatically log them in if registration is successful
         auth.registerUser(username, password);
+        cout << "Registration successful.\n";
     } else if (choice == 2) {
         // Attempt login
-        if (!auth.loginUser(username, password)) {
+        if (auth.loginUser(username, password)) {
+            cout << "Login successful.\n";
+        } else {
+            cout << "Invalid username or password.\n";
             return 0; // Exit if login fails
         }
     } else {
@@ -356,45 +396,70 @@ int main() {
         return 0; // Exit if invalid choice
     }
 
-    // Get the user object
+    // Get the user object after login/registration
     User* currentUser = auth.getUser(username);
-    if (currentUser) {
-        cout << "Welcome, " << username << "!\n";
 
-        while (true) {
-            cout << "\nTask Management Menu\n";
-            cout << "1. Add Task\n";
-            cout << "2. Display All Tasks\n";
-            cout << "6. Exit\n";
-            cout << "Choose an option: ";
-            cin >> choice;
+    if (currentUser == nullptr) {
+        // If the user object is not found or initialized correctly, show an error and exit
+        cout << "Error: User not found or initialization failed.\n";
+        return 1; // Exit with error code
+    }
 
-            switch (choice) {
-                case 1: {
-                    string title, description, priority, dueDate;
-                    cout << "Enter task title: ";
-                    cin.ignore();
-                    getline(cin, title);
-                    cout << "Enter task description: ";
-                    getline(cin, description);
-                    cout << "Enter task priority (Low, Medium, High): ";
-                    cin >> priority;
-                    cout << "Enter task due date (YYYY-MM-DD): ";
-                    cin >> dueDate;
-                    Task newTask(title, description, priority, dueDate);
-                    currentUser->addTask(conn, newTask);
-                    break;
-                }
-                case 2:
-                    currentUser->displayTasks(conn);
-                    break;
-                case 6:
-                    cout << "Exiting program...\n";
-                    mysql_close(conn);
-                    return 0;
-                default:
-                    cout << "Invalid choice. Please try again.\n";
+    string tasksFile = username + "_tasks.txt";  // Name for the task file
+
+    // Load tasks from file for the current user
+    currentUser->loadTasksFromFile(tasksFile);
+
+    cout << "Welcome, " << username << "!\n";
+     Notification::displayTaskAlerts(currentUser->getTaskManager().getTasks());
+    // Start task management loop
+    while (true) {
+        // Display Task Management Menu
+        currentUser->getTaskManager().displayMenu();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n'); // Clear input buffer
+
+        // Prompt for task management option
+        cout << "Choose an Option: ";
+        cin >> choice;
+
+        switch (choice) {
+            case 1: {
+                // Add task
+                string title, description, priority, dueDate;
+                cout << "Enter task title: ";
+                cin.ignore();  // To clear input buffer
+                getline(cin, title);
+                cout << "Enter task description: ";
+                getline(cin, description);
+                cout << "Enter task priority (Low, Medium, High): ";
+                getline(cin, priority);
+                cout << "Enter task due date (YYYY-MM-DD): ";
+                getline(cin, dueDate);
+
+                // Create and add new task
+                Task newTask(title, description, priority, dueDate);
+                currentUser->getTaskManager().createTask(newTask);
+                cout << "Task Created Success!"; 
+                break;
             }
+            case 2:
+                currentUser->getTaskManager().editTask();
+                break;
+            case 3:
+                currentUser->getTaskManager().deleteTask();
+                break;
+            case 4:
+                currentUser->getTaskManager().markTaskComplete();
+                break;
+            case 5:
+                currentUser->getTaskManager().displayTasks();
+                break;
+            case 6:
+                cout << "Exiting program...\n";
+                currentUser->saveTasksToFile(tasksFile);  // Save tasks before exit
+                return 0;
+            default:
+                cout << "Invalid choice. Please try again.\n";
         }
     }
 
