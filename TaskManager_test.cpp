@@ -1,327 +1,482 @@
 #include <iostream>
-#include <fstream>
-#include <vector>
 #include <string>
-#include <regex>
-#include <map>
+#include <vector>
+#include <cstring> // for strerror
+#include <cerrno>  // for errno  
+
 #include <algorithm>
-#include <cctype>
+#include <ctime>
 #include <sstream>
-// Task struct
-struct Task {
-    std::string title;
-    std::string description;
-    std::string dueDate;
-    std::string priority;
-    bool isCompleted = false;
+#include <fstream>
+#include <regex>
+#include <limits>
+#include <iomanip>
+#include <chrono>
+#include <stdexcept>
+
+using namespace std;
+
+//Gets the Current time
+std::string getCurrentDateTime() {
+    // Get current time
+    std::time_t now = std::time(nullptr);
+    std::tm currentTime = *std::localtime(&now);
+
+    // Buffer to hold the formatted string
+    char buf[64];
+    
+    // Format: "YYYY-MM-DD hh:mm AM/PM"
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %I:%M %p", &currentTime);
+
+    return std::string(buf);
+}
+
+//Reads the date and time string and converts it into the structured std::tm format
+std::tm stringToTime(const std::string& dateTime) {
+    std::tm tm = {};
+    std::istringstream ss(dateTime);
+    ss >> std::get_time(&tm, "%Y-%m-%d %I:%M %p");
+    if (ss.fail()) {
+        throw std::invalid_argument("Failed to parse the date-time string.");
+    }
+    return tm;
+}
+
+
+// Task Class
+class Task {
+private:
+    string title;
+    string description;
+    string priority;  // Low, Medium, High
+    string dueDate;   // Represent date as "YYYY-MM-DD"
+    bool completed;   // Indicates whether the task is completed or not
+
+public:
+    Task(string title, string description, string priority, string dueDate)
+        : title(title), description(description), priority(priority), dueDate(dueDate), completed(false) {}
+
+    string getTitle() const { return title; }
+    string getDescription() const { return description; }
+    string getPriority() const { return priority; }
+    string getDueDate() const { return dueDate; }
+    bool isCompleted() const { return completed; }
+
+    void setTitle(const string& newTitle) { title = newTitle; }
+    void setDescription(const string& newDescription) { description = newDescription; }
+    void setPriority(const string& newPriority) { priority = newPriority; }
+    void setDueDate(const string& newDueDate) { dueDate = newDueDate; }
+
+    void markComplete() { completed = true; }
+
+    void displayTask() const {
+        cout << "Title: " << title << endl;
+        cout << "Description: " << description << endl;
+        cout << "Priority: " << priority << endl;
+        cout << "Due Date: " << dueDate << endl;
+        cout << (completed ? "Status: Completed" : "Status: Pending") << endl;
+        cout << "-------------------------------\n";
+    }
 };
 
-// Function declarations
-bool isValidDate(const std::string& date);
-bool isValidPriority(const std::string& priority);
-void displayTasks(const std::vector<Task>& tasks);
-void saveTasksToFile(const std::map<std::string, std::vector<Task>>& userTasks, const std::string& username);
-void loadTasksFromFile(std::map<std::string, std::vector<Task>>& userTasks);
-bool authenticateUser(const std::string& username, const std::string& password, bool isLogin);
-void deleteTask(std::vector<Task>& tasks, const std::string& title);
-void markTaskComplete(std::vector<Task>& tasks, const std::string& title);
+// TaskManager class 
+class TaskManager {
+private:
+    vector<Task> tasks; // A vector that stores Task objects
 
-int main() {
-    std::map<std::string, std::vector<Task>> userTasks; // Store tasks for each user
-    loadTasksFromFile(userTasks); // Load tasks from file
+public:
+    // Allows the user to create a new task
+    void createTask(const Task& task) {
+        tasks.push_back(task);
+    }
 
-    std::string username, password;
-    bool loggedIn = false;
+    // Public method to access the tasks vector
+    vector<Task>& getTasks() {
+        return tasks;  // Return a reference to the tasks vector
+    }
 
-    std::cout << "Welcome to Task Manager!" << std::endl;
+    // Mark a task as complete
+    void markTaskComplete() {
+        string title;
+        cout << "Enter the title of the task to mark as complete: ";
+        cin.ignore();
+        getline(cin, title);
 
-    while (!loggedIn) {
-        char choice;
-        std::cout << "Do you want to (r)egister or (l)ogin? ";
-        std::cin >> choice;
-        choice = std::tolower(choice); // Make the input case-insensitive
-
-        if (choice == 'r') {
-            std::cout << "Enter username: ";
-            std::cin >> username;
-            std::cout << "Enter password: ";
-            std::cin >> password;
-
-            if (authenticateUser(username, password, false)) {
-                std::cout << "User registered successfully.\n";
-                loggedIn = true;
-            } else {
-                std::cout << "Username already exists. Please login instead.\n";
+        for (Task& task : tasks) {
+            if (task.getTitle() == title) {
+                task.markComplete();
+                cout << "Task marked as complete.\n";
+                return;
             }
-        } else if (choice == 'l') {
-            std::cout << "Enter username: ";
-            std::cin >> username;
-            std::cout << "Enter password: ";
-            std::cin >> password;
+        }
+        cout << "Task not found.\n";
+    }
+     
+    // Edit an existing task
+    void editTask() {
+        string title;
+        cout << "Enter the title of the task to edit: ";
+        cin.ignore();
+        getline(cin, title);
 
-            if (authenticateUser(username, password, true)) {
-                std::cout << "Login successful!" << std::endl;
-                loggedIn = true;
-            } else {
-                std::cout << "Invalid username or password. Please try again.\n";
+        for (Task& task : tasks) {
+            if (task.getTitle() == title) {
+                string newTitle, newDescription, newPriority, newDueDate;
+                cout << "Enter new title (leave empty to keep current): ";
+                getline(cin, newTitle);
+                cout << "Enter new description (leave empty to keep current): ";
+                getline(cin, newDescription);
+                cout << "Enter new priority (Low, Medium, High) (leave empty to keep current): ";
+                getline(cin, newPriority);
+                cout << "Enter new due date (YYYY-MM-DD HH:MM AM/PM) (leave empty to keep current): ";
+                getline(cin, newDueDate);
+
+                if (!newTitle.empty()) task.setTitle(newTitle);
+                if (!newDescription.empty()) task.setDescription(newDescription);
+                if (!newPriority.empty()) task.setPriority(newPriority);
+                if (!newDueDate.empty()) task.setDueDate(newDueDate);
+
+                cout << "Task updated successfully.\n";
+                return;
             }
+        }
+        cout << "Task not found.\n";
+    }
+
+    // Delete a task
+    void deleteTask() {
+        string title;
+        cout << "Enter the title of the task to delete: ";
+        cin.ignore();
+        getline(cin, title);
+
+        auto it = remove_if(tasks.begin(), tasks.end(), [&](const Task& task) {
+            return task.getTitle() == title;
+        });
+
+        if (it != tasks.end()) {
+            tasks.erase(it, tasks.end());
+            cout << "Task deleted successfully.\n";
         } else {
-            std::cout << "Invalid option. Please try again.\n";
+            cout << "Task not found.\n";
         }
     }
 
-    // Task management menu for the logged-in user
-    std::vector<Task>& tasks = userTasks[username];
-    while (true) {
-        std::cout << "\nTask Management Menu\n";
-        std::cout << "1. Add Task\n";
-        std::cout << "2. Edit Task\n";
-        std::cout << "3. Delete Task\n";
-        std::cout << "4. Mark Task as Complete\n";
-        std::cout << "5. Display All Tasks\n";
-        std::cout << "6. Exit\n";
-        std::cout << "Select an option: ";
-
-        int option;
-        std::cin >> option;
-
-        if (option == 1) {
-            Task newTask;
-            std::cout << "Enter task title: ";
-            std::cin.ignore(); 
-            std::getline(std::cin, newTask.title);
-            std::cout << "Enter task description: ";
-            std::getline(std::cin, newTask.description);
-
-            // Validate date input
-            do {
-                std::cout << "Enter task due date (e.g., YYYY-MM-DD): ";
-                std::getline(std::cin, newTask.dueDate);
-            } while (!isValidDate(newTask.dueDate));
-
-            // Validate priority input
-            do {
-                std::cout << "Enter task priority (e.g., High, Medium, Low): ";
-                std::getline(std::cin, newTask.priority);
-            } while (!isValidPriority(newTask.priority));
-
-            tasks.push_back(newTask);
-            saveTasksToFile(userTasks, username);
-            std::cout << "Task added successfully.\n";
-
-        } else if (option == 2) {
-            std::string taskTitle;
-            std::cout << "Enter the title of the task to edit: ";
-            std::cin.ignore();
-            std::getline(std::cin, taskTitle);
-            bool taskFound = false;
-
-            for (auto& task : tasks) {
-                if (task.title == taskTitle) {
-                    taskFound = true;
-	            std::cout << "Editing task: " << task.title << "\n";
-                    std::cout << "Enter new task title: ";
-                    std::getline(std::cin, task.title); 
-                    std::cout << "Editing task: " << task.title << "\n";
-                    std::cout << "Enter new task description (leave blank to keep current): ";
-                    std::getline(std::cin, task.description);  // Get the new description
-		    if (task.description.empty()) {
-			    std::cout << "Description not changed, keeping the original: " << task.description << "\n";
-                     }
-                    do {
-                        std::cout << "Enter new task due date (e.g., YYYY-MM-DD): ";
-                        std::getline(std::cin, task.dueDate);
-                    } while (!isValidDate(task.dueDate));
-                    do {
-                        std::cout << "Enter new task priority (e.g., High, Medium, Low): ";
-                        std::getline(std::cin, task.priority);
-                    } while (!isValidPriority(task.priority));
-                    saveTasksToFile(userTasks, username);
-                    std::cout << "Task updated successfully.\n";
-                    break;
-                }
-            }
-
-            if (!taskFound) {
-                std::cout << "Task not found.\n";
-            }
-
-        } else if (option == 3) {
-            std::string taskTitle;
-            std::cout << "Enter the title of the task to delete: ";
-            std::cin.ignore();
-            std::getline(std::cin, taskTitle);
-            deleteTask(tasks, taskTitle);
-            saveTasksToFile(userTasks, username);
-
-        } else if (option == 4) {
-            std::string taskTitle;
-            std::cout << "Enter the title of the task to mark as complete: ";
-            std::cin.ignore();
-            std::getline(std::cin, taskTitle);
-            markTaskComplete(tasks, taskTitle);
-            saveTasksToFile(userTasks, username);
-
-        } else if (option == 5) {
-            displayTasks(tasks);
-
-        } else if (option == 6) {
-            std::cout << "Exiting program." << std::endl;
-            break;
-
+    // Display all tasks
+    void displayTasks() {
+        if (tasks.empty()) {
+            cout << "No tasks available.\n";
         } else {
-            std::cout << "Invalid option, please try again." << std::endl;
-        }
-    }
-
-    return 0;
-}
-// Function implementations...
-
-// Function to validate date format (YYYY-MM-DD)
-
-bool isValidDate(const std::string& date) {
-    // Check format: YYYY-MM-DD
-    std::regex datePattern(R"((\d{4})-(\d{2})-(\d{2}))");
-    std::smatch match;
-    if (!std::regex_match(date, match, datePattern)) {
-        return false; // Doesn't match the basic pattern
-    }
-
-    int year, month, day;
-    std::istringstream(match[1].str()) >> year;
-    std::istringstream(match[2].str()) >> month;
-    std::istringstream(match[3].str()) >> day;
-
-    // Check valid month and day range
-    if (month < 1 || month > 12) {
-        return false;
-    }
-
-    // Days in each month (index 0 is unused for simplicity)
-    int daysInMonth[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-
-    // Adjust for leap year if it's February
-    if (month == 2 && ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0))) {
-        daysInMonth[2] = 29;
-    }
-
-    if (day < 1 || day > daysInMonth[month]) {
-        return false;
-    }
-
-    return true;
-}
-
-// Function to validate priority input (case-insensitive)
-bool isValidPriority(const std::string& priority) {
-    std::string lowerPriority = priority;
-    std::transform(lowerPriority.begin(), lowerPriority.end(), lowerPriority.begin(), ::tolower);
-    return (lowerPriority == "high" || lowerPriority == "medium" || lowerPriority == "low");
-}
-
-// Function to display tasks
-void displayTasks(const std::vector<Task>& tasks) {
-    if (tasks.empty()) {
-        std::cout << "No tasks to display." << std::endl;
-        return;
-    }
-    for (const auto& task : tasks) {
-        std::cout << "Title: " << task.title << ", Description: " << task.description
-                  << ", Due Date: " << task.dueDate << ", Priority: " << task.priority
-                  << " (" << (task.isCompleted ? "Completed" : "Pending") << ")" << std::endl;
-    }
-}
-
-// Function to save tasks to a file
-void saveTasksToFile(const std::map<std::string, std::vector<Task>>& userTasks, const std::string& username) {
-    std::ofstream file("tasks.txt", std::ios::trunc);
-    for (const auto& [user, tasks] : userTasks) {
-        file << user << "\n";
-        for (const auto& task : tasks) {
-            file << task.title << "\n"
-                 << task.description << "\n"
-                 << task.dueDate << "\n"
-                 << task.priority << "\n"
-                 << task.isCompleted << "\n";
-        }
-        file << "END\n"; // Delimiter for tasks of a user
-    }
-    file.close();
-}
-
-// Function to load tasks from a file
-void loadTasksFromFile(std::map<std::string, std::vector<Task>>& userTasks) {
-    std::ifstream file("tasks.txt");
-    if (!file.is_open()) {
-        return;
-    }
-    std::string line, username;
-    while (std::getline(file, username)) {
-        if (username == "END") {
-            continue;
-        }
-        std::vector<Task> tasks;
-        Task task;
-        while (std::getline(file, line) && line != "END") {
-            task.title = line;
-            std::getline(file, task.description);
-            std::getline(file, task.dueDate);
-            std::getline(file, task.priority);
-            file >> task.isCompleted;
-            file.ignore(); // Skip the newline character after isCompleted
-            tasks.push_back(task);
-        }
-        userTasks[username] = tasks;
-    }
-    file.close();
-}
-
-// Function to authenticate user
-bool authenticateUser(const std::string& username, const std::string& password, bool isLogin) {
-    std::ifstream file("auth.txt");
-    std::string storedUsername, storedPassword;
-    while (file >> storedUsername >> storedPassword) {
-        if (storedUsername == username) {
-            if (isLogin) {
-                return storedPassword == password; // Check password for login
-            } else {
-                return false; // Username already exists for registration
+            for (const Task& task : tasks) {
+                task.displayTask();
             }
         }
     }
-    file.close();
-    if (!isLogin) {
-        // Register the new user
-        std::ofstream outFile("auth.txt", std::ios::app);
-        outFile << username << " " << password << "\n";
-        outFile.close();
-        return true;
-    }
-    return false;
-}
 
-// Function to delete a task
-void deleteTask(std::vector<Task>& tasks, const std::string& title) {
-    auto it = std::remove_if(tasks.begin(), tasks.end(), [&](const Task& t) {
-        return t.title == title;
-    });
-    if (it != tasks.end()) {
-        tasks.erase(it, tasks.end());
-        std::cout << "Task deleted successfully.\n";
-    } else {
-        std::cout << "Task not found.\n";
+    // Display the task management menu
+    void displayMenu() {
+        cout << "\nTask Management Menu\n";
+        cout << "1. Add Task\n";
+        cout << "2. Edit Task\n";
+        cout << "3. Delete Task\n";
+        cout << "4. Mark Task as Complete\n";
+        cout << "5. Display All Tasks\n";
+        cout << "6. Exit\n";
     }
-}
+};
+ 
 
-// Function to mark a task as complete
-void markTaskComplete(std::vector<Task>& tasks, const std::string& title) {
-    for (auto& task : tasks) {
-        if (task.title == title) {
-            task.isCompleted = true;
-            std::cout << "Task marked as completed." << std::endl;
+// User Class
+class User {
+private:
+    string username;
+    string password;
+    TaskManager taskManager; // User-specific TaskManager
+
+public:
+    User(string username, string password) : username(username), password(password) {}
+
+    string getUsername() const { return username; }
+    string getPassword() const { return password; }
+
+    TaskManager& getTaskManager() { return taskManager; }
+
+    void loadTasksFromFile(const string& filename) {
+        // Load tasks from file into TaskManager's task list
+        ifstream file(filename);
+        if (!file) {
+            cerr << "Error opening task file for loading tasks.\n";
             return;
         }
+
+        string line;
+        while (getline(file, line)) {
+
+            stringstream ss(line);
+            string title, description, priority, dueDate;
+            getline(ss, title, ',');
+            getline(ss, description, ',');
+            getline(ss, priority, ',');
+            getline(ss, dueDate, ',');
+
+            // Create a new task and add it to the task manager
+            Task task(title, description, priority, dueDate);
+            taskManager.createTask(task); // Using createTask with the new task
+        }
+        file.close();
     }
-    std::cout << "Task not found." << std::endl;
+
+    void saveTasksToFile(const string& filename) {
+        ofstream file(filename, ios::trunc);
+        if (!file) {
+            cerr << "Error opening task file for saving tasks.\n";
+            return;
+        }
+
+        for (const Task& task : taskManager.getTasks()) {
+            file << task.getTitle() << "," << task.getDescription() << ","
+                 << task.getPriority() << "," << task.getDueDate() << endl;
+        }
+        file.close();
+    }
+};
+
+
+// Notification Class
+class Notification {
+public:
+    static void displayTaskAlerts(const std::vector<Task>& tasks) {
+        std::string currentDateTime = getCurrentDateTime();
+        std::cout << "Task Notifications:\n";
+        
+        for (const Task& task : tasks) {
+            std::string taskDueDate = task.getDueDate();
+            if (task.isCompleted()) continue;
+
+            try {
+                std::tm taskTime = stringToTime(taskDueDate);
+                std::tm currentTime = stringToTime(currentDateTime);
+
+                if (difftime(mktime(&currentTime), mktime(&taskTime)) > 0) {
+                    std::cout << "ALERT! Task \"" << task.getTitle() << "\" is overdue! Due at: " << taskDueDate << "\n";
+                } else if (difftime(mktime(&taskTime), mktime(&currentTime)) < 86400) {
+                    std::cout << "ALERT! Task \"" << task.getTitle() << "\" is due soon! Due at: " << taskDueDate << "\n";
+                }
+            } catch (const std::invalid_argument& e) {
+                std::cout << "Invalid date format for task \"" << task.getTitle() << "\". Skipping alert.\n";
+            }
+        }
+        
+        std::cout << "-------------------------------\n";
+    }
+};
+
+// Authentication Class
+class Authentication {
+private:
+    vector<User> users;
+    string filename;
+
+    void loadUsers() {
+        ifstream file(filename);
+        if (!file) {
+            if (errno != ENOENT) {  // ENOENT is the error code for "No such file or directory"
+            cerr << "Error opening file for loading users: " << strerror(errno) << endl;
+          }
+            return;
+        }
+
+        string line;
+        while (getline(file, line)) {
+            size_t pos = line.find(',');
+            if (pos == string::npos) continue; // Skip invalid lines without commas
+
+            string username = line.substr(0, pos);
+            string password = line.substr(pos + 1);
+            users.push_back(User(username, password));
+        }
+        if (file.bad()) {
+        // If there was an actual I/O error while reading the file
+        cerr << "Error reading users file.\n";
+        }
+
+        file.close();
+    }
+
+    void saveUsers() {
+        ofstream file(filename, ios::trunc);
+        if (!file) {
+            cerr << "Error opening file for saving users.\n";
+            return;
+        }
+
+        for (const User& user : users) {
+            file << user.getUsername() << "," << user.getPassword() << endl;
+        }
+        file.close();
+    }
+
+public:
+    Authentication(string filename) : filename(filename) {
+        loadUsers();
+    }
+
+    bool isValidUsername(const string& username) {
+        return !username.empty() && regex_match(username, regex("^[a-zA-Z0-9]+$"));
+    }
+
+    bool isValidPassword(const string& password) {
+        return password.length() >= 8 && regex_search(password, regex("[0-9]")) && regex_search(password, regex("[!@#$%^&*]"));
+    }
+
+    bool loginUser(const string& username, const string& password) {
+        for (User& user : users) {
+            if (user.getUsername() == username && user.getPassword() == password) {
+                return true;
+            }
+        }
+        cout << "Invalid username or password.\n";
+        return false;
+    }
+
+    void registerUser(const string& username, const string& password) {
+        if (isValidUsername(username) && isValidPassword(password)) {
+            for (const User& user : users) {
+                if (user.getUsername() == username) {
+                    cout << "Username already taken. Try another one.\n";
+                    return;
+                }
+            }
+            users.push_back(User(username, password));
+            saveUsers();
+            cout << "User registered successfully.\n";
+        } else {
+            cout << "Invalid username or password format.\n";
+        }
+    }
+
+    User* getUser(const string& username) {
+        for (User& user : users) {
+            if (user.getUsername() == username) {
+                return &user;
+            }
+        }
+        return nullptr;
+    }
+};
+
+// Main function
+int main() {
+    Authentication auth("users.txt");
+    User* currentUser = nullptr;
+    string username, password;
+    bool isAuthenticated = false;
+
+    while (true) {
+        cout << "Welcome to Task Manager\n";
+        cout << "1. Register\n";
+        cout << "2. Login\n";
+        cout << "Choose an option: ";
+        int choice;
+        cin >> choice;
+        // Check for invalid input and clear the buffer
+        if (cin.fail()) {
+            cin.clear(); // Clear the error flag
+            cin.ignore(numeric_limits<streamsize>::max(), '\n'); // Ignore the invalid input
+            cout << "Invalid choice. Please enter a valid number.\n";
+            continue; // Prompt the user again
+        }
+
+
+        switch (choice) {
+            case 1:  // Register
+                cout << "Username must include Uppercase or Lowercase letter and number 0-9]"
+                cout << "Password must be 8 characters long, must contain one digit(0-9), and must have atleast one special character !@#$%^&* "
+                cout << "Username: ";
+                cin >> username;
+                cout << "Password: ";
+                cin >> password;
+                auth.registerUser(username, password);
+                break;
+
+            case 2:  // Login
+                cout << "Username: ";
+                cin >> username;
+                cout << "Password: ";
+                cin >> password;
+                if (auth.loginUser(username, password)) {
+                    currentUser = auth.getUser(username);
+                    isAuthenticated = true;
+                    currentUser->loadTasksFromFile("tasks.txt");
+                    cout << "Login successful.\n";
+                } else {
+                    cout << "Error logging in. Try again.\n";
+                }
+                break;
+
+            default:
+                cout << "Invalid choice.\n";
+                continue;
+        }
+
+        if (isAuthenticated) {
+            // Task Manager Interface
+            TaskManager& manager = currentUser->getTaskManager();
+            Notification::displayTaskAlerts(manager.getTasks());
+            while (true) {
+                manager.displayMenu();
+                cout << "Choose an option: ";
+ 
+                cin >> choice;
+
+                switch (choice) {
+                    case 1: {  // Add Task
+                        string title, description, priority, dueDate;
+                        cout << "Enter task title: ";
+                        cin.ignore();
+                        getline(cin, title);
+                        cout << "Enter task description: ";
+                        getline(cin, description);
+                        cout << "Enter task priority (Low, Medium, High): ";
+                        getline(cin, priority);
+                        cout << "Enter task due date (YYYY-MM-DD HH:MM AM/PM): ";
+                        getline(cin, dueDate);
+                        Task newTask(title, description, priority, dueDate);
+                        manager.createTask(newTask);
+                        break;
+                    }
+                    case 2: {  // Edit Task
+                        manager.editTask();
+                        break;
+                    }
+                    case 3: {  // Delete Task
+                        manager.deleteTask();
+                        break;
+                    }
+                    case 4: {  // Mark Task as Complete
+                        manager.markTaskComplete();
+                        break;
+                    }
+                    case 5: {  // Display Tasks
+                        manager.displayTasks();
+                        break;
+                    }
+                    case 6: {  // Exit
+                        currentUser->saveTasksToFile("tasks.txt");
+                        cout << "Goodbye.\n";
+                        return 0;
+                    }
+                    default:
+                        cout << "Invalid option. Try again.\n";
+                }
+            }
+        }
+    }
 }
+
+
+
+
+
+
+
