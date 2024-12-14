@@ -390,8 +390,8 @@ int main() {
 
         switch (choice) {
             case 1:  // Register
-                cout << "Username must include Uppercase or Lowercase letter and number 0-9]"
-                cout << "Password must be 8 characters long, must contain one digit(0-9), and must have atleast one special character !@#$%^&* "
+                cout << "Username must include Uppercase or Lowercase letter and number 0-9] \n";
+                cout << "Password must be 8 characters long, must contain one digit(0-9), and must have atleast one special character !@#$%^&* \n ";
                 cout << "Username: ";
                 cin >> username;
                 cout << "Password: ";
