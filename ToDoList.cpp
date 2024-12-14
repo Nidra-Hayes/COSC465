@@ -407,7 +407,7 @@ int main() {
                 if (auth.loginUser(username, password)) {
                     currentUser = auth.getUser(username);
                     isAuthenticated = true;
-                    currentUser->loadTasksFromFile("tasks.txt");
+                    currentUser->loadTasksFromFile("tasks"+ username+ ".txt");
                     cout << "Login successful.\n";
                 } else {
                     cout << "Error logging in. Try again.\n";
@@ -462,7 +462,8 @@ int main() {
                         break;
                     }
                     case 6: {  // Exit
-                        currentUser->saveTasksToFile("tasks.txt");
+			
+                        currentUser->saveTasksToFile("tasks" +username + ".txt");
                         cout << "Goodbye.\n";
                         return 0;
                     }
@@ -473,7 +474,6 @@ int main() {
         }
     }
 }
-
 
 
 
